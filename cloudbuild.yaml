@@ -1,0 +1,37 @@
+steps:
+  # build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'A_MEDIA=$_MEDIA'
+      - '--build-arg'
+      - 'A_API=$_API'
+      - '--build-arg'
+      - 'A_GOOGLEKEY=$_GOOGLEKEY'
+      - '--build-arg'
+      - 'A_COMMIT=$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/$REPO_NAME-$BRANCH_NAME:$COMMIT_SHA'
+      - '.'
+  # push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/$REPO_NAME-$BRANCH_NAME:$COMMIT_SHA']
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '$REPO_NAME-$BRANCH_NAME'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/$REPO_NAME-$BRANCH_NAME:$COMMIT_SHA'
+      - '--region'
+      - 'europe-west1'
+      - '--platform'
+      - 'managed'
+      - '--set-env-vars'
+      - 'MEDIA=$_MEDIA,API=$_API,GOOGLEKEY=$_GOOGLEKEY,COMMIT=$SHORT_SHA'
+images:
+  - 'gcr.io/$PROJECT_ID/$REPO_NAME-$BRANCH_NAME:$COMMIT_SHA'
+options:
+  machineType: 'N1_HIGHCPU_32'
