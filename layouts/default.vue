@@ -37,12 +37,12 @@
 
 <script setup lang="ts">
 import { useTheme } from 'vuetify'
-import { useMainStore } from '~/stores/main'
+// import { useMainStore } from '~/stores/main'
 import SettingsDialog from '~/components/SettingsDialog.vue'
 const theme = useTheme()
 
 const localePath = useLocalePath()
-const mainStore = useMainStore()
+// const mainStore = useMainStore()
 const drawer = ref(false)
 const clipped = ref(false)
 
@@ -53,7 +53,7 @@ const setTheme = function (val: string) {
 const settingsDialog = ref(false)
 
 onMounted(() => {
-  if (mainStore.controllerIp === null) settingsDialog.value = true
+  // if (mainStore.controllerIp === null) settingsDialog.value = true
 })
 
 const switchTheme = function () {

@@ -27,6 +27,7 @@
     "@pinia-plugin-persistedstate/nuxt": "^1.0.0",
     "@pinia/nuxt": "^0.4.3",
     "@types/lodash": "^4.14.199",
+    "chart.js": "^4.4.6",
     "eslint": "^8.27.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-nuxt": "^4.0.0",
@@ -46,6 +47,7 @@
     "stylelint-config-standard": "^29.0.0",
     "typescript": "^4.8.4",
     "vite-plugin-vuetify": "^1.0.0",
+    "vue-chartjs": "^5.3.2",
     "vue-eslint-parser": "^9.1.0",
     "vuedraggable": "4",
     "vuetify": "^3.1"

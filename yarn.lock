@@ -689,6 +689,11 @@
     sharp "^0.31.3"
     std-env "^3.3.1"
 
+"@kurkle/color@^0.3.0":
+  version "0.3.2"
+  resolved "https://registry.yarnpkg.com/@kurkle/color/-/color-0.3.2.tgz#5acd38242e8bde4f9986e7913c8fdf49d3aa199f"
+  integrity sha512-fuscdXJ9G1qb7W8VdHi+IwRqij3lBkosAm4ydQtEmbY58OzHXqQhvlxqEkoz0yssNVn38bcpRWgA9PP+OGoisw==
+
 "@mapbox/node-pre-gyp@^1.0.5":
   version "1.0.11"
   resolved "https://registry.yarnpkg.com/@mapbox/node-pre-gyp/-/node-pre-gyp-1.0.11.tgz#417db42b7f5323d79e93b34a6d7a2a12c0df43fa"
@@ -1979,6 +1984,13 @@ chalk@^5.3.0:
   version "5.3.0"
   resolved "https://registry.yarnpkg.com/chalk/-/chalk-5.3.0.tgz#67c20a7ebef70e7f3970a01f90fa210cb6860385"
   integrity sha512-dLitG79d+GV1Nb/VYcCDFivJeK1hiukt9QjRNVOsUtTy1rR1YJsmpGGTZ3qJos+uw7WmWF4wUwBd9jxjocFC2w==
+
+chart.js@^4.4.6:
+  version "4.4.6"
+  resolved "https://registry.yarnpkg.com/chart.js/-/chart.js-4.4.6.tgz#da39b84ca752298270d4c0519675c7659936abec"
+  integrity sha512-8Y406zevUPbbIBA/HRk33khEmQPk5+cxeflWE/2rx1NJsjVWMPw/9mSP9rxHP5eqi6LNoPBVMfZHxbwLSgldYA==
+  dependencies:
+    "@kurkle/color" "^0.3.0"
 
 chokidar@^3.5.1, chokidar@^3.5.3:
   version "3.5.3"
@@ -6692,6 +6704,11 @@ vue-bundle-renderer@^2.0.0:
   integrity sha512-oYATTQyh8XVkUWe2kaKxhxKVuuzK2Qcehe+yr3bGiaQAhK3ry2kYE4FWOfL+KO3hVFwCdLmzDQTzYhTi9C+R2A==
   dependencies:
     ufo "^1.2.0"
+
+vue-chartjs@^5.3.2:
+  version "5.3.2"
+  resolved "https://registry.yarnpkg.com/vue-chartjs/-/vue-chartjs-5.3.2.tgz#c0f2009af6b08845af158ddee9d0a68d9dae631b"
+  integrity sha512-NrkbRRoYshbXbWqJkTN6InoDVwVb90C0R7eAVgMWcB9dPikbruaOoTFjFYHE/+tNPdIe6qdLCDjfjPHQ0fw4jw==
 
 vue-demi@>=0.14.5, vue-demi@^0.14.5:
   version "0.14.6"

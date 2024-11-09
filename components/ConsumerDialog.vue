@@ -11,6 +11,7 @@
       </v-toolbar>
       <v-card-text>
         <v-text-field v-model="editedItem.name" label="Name" :variant="'underlined'"></v-text-field>
+        <v-text-field v-model="editedItem.phase" label="Phase" :variant="'underlined'"></v-text-field>
         <v-text-field v-model="editedItem.ip" label="IP" :variant="'underlined'"></v-text-field>
         <v-text-field
           v-model="editedItem.max_consumption"
@@ -54,7 +55,8 @@ const props = defineProps({
 const editedItem = ref<Partial<Consumer>>({
   name: undefined,
   ip: undefined,
-  max_consumption: undefined
+  max_consumption: undefined,
+  phase: undefined
 })
 
 watch(
@@ -70,7 +72,20 @@ watch(
 )
 const emits = defineEmits(['cancelClicked', 'confirmClicked'])
 
-function save() {
+async function save() {
+  mainStore.consumers.splice(
+    mainStore.consumers.findIndex(c => c.name === props.consumerName),
+    1,
+    editedItem.value as Consumer
+  )
+  const response = await fetch('http://192.168.0.40/script/1/setConsumer', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(editedItem.value)
+  })
+  console.log(await response.text())
   emits('confirmClicked')
 }
 const computedButtonVariant = computed(() => {
