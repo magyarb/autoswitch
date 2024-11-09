@@ -1,6 +1,11 @@
 <template>
   <v-row>
-    <v-col cols="12" class="text-h4"> Status </v-col>
+    <v-col cols="12" class="text-h4 d-flex">
+      <div>Status</div>
+      <v-spacer></v-spacer>
+
+      <v-btn color="primary" @click="getChartData">get chart data</v-btn>
+    </v-col>
 
     <v-col cols="12" lg="4">
       <v-card>
@@ -85,7 +90,6 @@
         </v-card-text>
       </v-card>
     </v-col>
-    <v-btn color="primary" @click="getChartData"><v-icon>$mdi-plus</v-icon>getChartData</v-btn>
     <v-col v-if="showCharts" cols="12" class="text-h4"> Chart </v-col>
 
     <v-col v-if="showCharts" cols="12">
