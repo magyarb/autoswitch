@@ -13,8 +13,9 @@ export default defineNuxtPlugin(() => {
       serviceVersion: version,
       environment,
       endpoint: { url: dash0.endpoint, authToken: dash0.authToken, dataset: dash0.dataset || undefined },
-      // the app polls the controller every few seconds; those requests would only be noise
-      ignoreUrls: [/\/script\/\d+\/(getCData|getLog)$/]
+      // the app polls the controller every few seconds (RPC calls to /rpc, or the old script
+      // endpoints); those requests would only be noise, and installs and updates log their own events
+      ignoreUrls: [/\/rpc$/, /\/script\/\d+\/(getCData|getLog)$/]
     })
     setTelemetrySdk(sdk)
     // one entry per visit, so every open shows up even when nothing goes wrong
