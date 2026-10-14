@@ -65,6 +65,17 @@ export async function rpc<T = unknown>(ip: string, method: string, params: objec
   return body.result as T
 }
 
+// Calls an api_* function inside the running script through RPC and returns its JSON answer.
+// Current firmware answers cross-origin requests to script endpoints (/script/<id>/...) with 403,
+// while the RPC API allows them, so the app never uses the endpoints directly.
+export async function evalScript<T>(ip: string, scriptId: number, code: string) {
+  const { result } = await rpc<{ result: string }>(ip, 'Script.Eval', { id: scriptId, code })
+  let value: unknown = JSON.parse(result)
+  // depending on the firmware, a returned string may come back quoted once more
+  if (typeof value === 'string') value = JSON.parse(value)
+  return value as T
+}
+
 // Gen1 HTTP API, e.g. /ota or /relay/0
 export function gen1<T = unknown>(ip: string, path: string) {
   return request<T>(`http://${ip}${path}`)
@@ -82,18 +93,41 @@ export function useShelly() {
   const mainStore = useMainStore()
 
   const scriptUrl = (endpoint: string) => `http://${mainStore.controllerIp}/script/${mainStore.scriptId}/${endpoint}`
+  const call = <T>(code: string) => evalScript<T>(mainStore.controllerIp, mainStore.scriptId, code)
 
-  // the script allows only 5 endpoints, so every change goes to one, picked by `action`
-  const update = (action: string, body: object) =>
-    request<{ status: string }>(scriptUrl('update'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, ...body })
-    })
+  // every change goes through api_update, picked by `action`
+  async function update(action: string, body: object) {
+    const text = JSON.stringify({ action, ...body })
+    const answer = await call<{ code: number; body: { status: string; error?: string } }>(
+      `api_update(${JSON.stringify(text)})`
+    )
+    if (answer.code >= 400) throw new ShellyHttpError(answer.body.error ?? `HTTP ${answer.code}`, answer.code)
+    return answer.body
+  }
+
+  async function getData() {
+    try {
+      return await call<ControllerData>('api_get_data()')
+    } catch (e) {
+      // scripts older than the RPC API only have the endpoint
+      if (e instanceof ShellyHttpError) return request<ControllerData>(scriptUrl('getCData'))
+      throw e
+    }
+  }
+
+  async function getLog() {
+    try {
+      return await call<ActivityLog>('api_get_log()')
+    } catch (e) {
+      // older scripts have no activity log
+      if (e instanceof ShellyHttpError) throw new ShellyHttpError(e.message, 404)
+      throw e
+    }
+  }
 
   return {
-    getData: () => request<ControllerData>(scriptUrl('getCData')),
-    getLog: () => request<ActivityLog>(scriptUrl('getLog')),
+    getData,
+    getLog,
     ackLog: (seq: number) => update('ack_log', { seq }),
     // originalName is the current name when editing, undefined when adding
     setConsumer: (consumer: ConsumerInput, originalName?: string) =>

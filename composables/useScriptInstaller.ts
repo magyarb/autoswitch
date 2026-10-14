@@ -83,8 +83,8 @@ export function useScriptInstaller() {
     const deadline = Date.now() + VERIFY_TIMEOUT_MS
     while (Date.now() < deadline) {
       try {
-        const response = await fetch(`http://${ip}/script/${id}/getCData`)
-        if (response.ok && (await response.json()).script_version === BUNDLED_SCRIPT_VERSION) return
+        const data = await evalScript<{ script_version?: string }>(ip, id, 'api_get_data()')
+        if (data.script_version === BUNDLED_SCRIPT_VERSION) return
       } catch {
         // still starting
       }

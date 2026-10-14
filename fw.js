@@ -488,8 +488,8 @@ function validate_consumer(body) {
   return null
 }
 
-function handle_get_data(request, response) {
-  send_json(response, 200, {
+function data_object() {
+  return {
     a_consumption: a_consumption,
     b_consumption: b_consumption,
     c_consumption: c_consumption,
@@ -499,11 +499,19 @@ function handle_get_data(request, response) {
     meters_ok: meters_ok,
     script_version: SCRIPT_VERSION,
     consumers: consumers
-  })
+  }
+}
+
+function log_object() {
+  return { boot_id: boot_id, seq: log_seq, forwarded_seq: log_forwarded_seq, entries: log_entries }
+}
+
+function handle_get_data(request, response) {
+  send_json(response, 200, data_object())
 }
 
 function handle_get_log(request, response) {
-  send_json(response, 200, { boot_id: boot_id, seq: log_seq, forwarded_seq: log_forwarded_seq, entries: log_entries })
+  send_json(response, 200, log_object())
 }
 
 // the app reports which events it has forwarded, so other open browsers don't send them again
@@ -594,14 +602,43 @@ function set_order(body, response) {
   send_json(response, 200, { status: 'ok' })
 }
 
-function handle_update(request, response) {
-  let body = read_body(request, response)
-  if (!body) return null
+function dispatch_update(body, response) {
   if (body.action === 'set_consumer') set_consumer(body, response)
   else if (body.action === 'delete_consumer') delete_consumer(body, response)
   else if (body.action === 'set_order') set_order(body, response)
   else if (body.action === 'ack_log') ack_log(body, response)
   else send_error(response, 400, 'unknown action: ' + body.action)
+}
+
+function handle_update(request, response) {
+  let body = read_body(request, response)
+  if (!body) return null
+  dispatch_update(body, response)
+}
+
+// ---- API for the app over RPC (Script.Eval) ----------------------------------
+//
+// Current firmware answers cross-origin requests to script endpoints with 403, while
+// the RPC API (/rpc) allows them. So the app calls these through Script.Eval, e.g.
+// {"method":"Script.Eval","params":{"id":1,"code":"api_get_data()"}}, and gets JSON text back.
+
+function ignore_send() {}
+
+function api_get_data() {
+  return JSON.stringify(data_object())
+}
+
+function api_get_log() {
+  return JSON.stringify(log_object())
+}
+
+// text: the request as JSON text; returns {"code":...,"body":{...}} as JSON text
+function api_update(text) {
+  let response = { code: 200, body: '', headers: [], send: ignore_send }
+  let body = parse_json(text)
+  if (body) dispatch_update(body, response)
+  else send_error(response, 400, 'invalid JSON')
+  return '{"code":' + response.code + ',"body":' + response.body + '}'
 }
 
 // ---- start -----------------------------------------------------------------
