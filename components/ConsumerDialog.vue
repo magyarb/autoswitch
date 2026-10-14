@@ -1,66 +1,61 @@
 <template>
-  <v-dialog :model-value="modelValue" :fullscreen="$vuetify.display.smAndDown" :persistent="true" :max-width="500">
-    <v-card>
-      <v-toolbar>
-        <v-toolbar-title v-if="props.consumerName">Edit {{ props.consumerName }}</v-toolbar-title>
-        <v-toolbar-title v-else>New consumer</v-toolbar-title>
+  <v-dialog :model-value="modelValue" :fullscreen="$vuetify.display.smAndDown" :persistent="true" :max-width="480">
+    <v-card class="pa-2">
+      <v-card-title class="d-flex align-center">
+        <span>{{ props.consumerName ? `Edit ${props.consumerName}` : 'New consumer' }}</span>
         <v-spacer />
-        <v-btn icon @click="$emit('cancelClicked')">
-          <v-icon>$mdi-close</v-icon>
-        </v-btn>
-      </v-toolbar>
+        <v-btn
+          :icon="mdiClose"
+          variant="text"
+          density="comfortable"
+          aria-label="Close"
+          @click="$emit('cancelClicked')"
+        />
+      </v-card-title>
       <v-form ref="form" @submit.prevent="save">
-        <v-card-text>
-          <v-alert v-if="saveError" type="error" variant="tonal" class="mb-4">{{ saveError }}</v-alert>
-          <v-text-field
-            v-model.trim="editedItem.name"
-            label="Name"
-            :rules="[required, maxLength(32)]"
-            :variant="'underlined'"
-          ></v-text-field>
+        <v-card-text class="d-flex flex-column ga-2">
+          <v-alert v-if="saveError" type="error" variant="tonal" density="compact">{{ saveError }}</v-alert>
+          <v-text-field v-model.trim="editedItem.name" label="Name" :rules="[required, maxLength(32)]"></v-text-field>
           <v-text-field
             v-model.trim="editedItem.ip"
-            label="IP"
+            label="IP address"
+            hint="Gen1 relay, e.g. Shelly Plug S or 1PM"
             :rules="[required, maxLength(40)]"
-            :variant="'underlined'"
           ></v-text-field>
-          <v-select
-            v-model="editedItem.phase"
-            label="Phase"
-            :items="['A', 'B', 'C']"
-            :rules="[required]"
-            :variant="'underlined'"
-          ></v-select>
-          <v-text-field
-            v-model.number="editedItem.max_consumption"
-            label="Max consumption"
-            type="number"
-            suffix="W"
-            :rules="[positive]"
-            :variant="'underlined'"
-          ></v-text-field>
-          <v-select
-            v-model="editedItem.mode"
-            label="Mode"
-            :items="['auto', 'on', 'off']"
-            :rules="[required]"
-            :variant="'underlined'"
-          ></v-select>
+          <div class="d-flex ga-3">
+            <v-select
+              v-model="editedItem.phase"
+              label="Phase"
+              :items="['A', 'B', 'C']"
+              :rules="[required]"
+              class="flex-1"
+            ></v-select>
+            <v-text-field
+              v-model.number="editedItem.max_consumption"
+              label="Max consumption"
+              type="number"
+              suffix="W"
+              :rules="[positive]"
+              class="flex-1"
+            ></v-text-field>
+          </div>
+          <v-select v-model="editedItem.mode" label="Mode" :items="MODES" :rules="[required]"></v-select>
         </v-card-text>
 
-        <v-card-actions>
+        <v-card-actions class="px-6 pb-4">
           <v-btn
             v-if="props.consumerName"
             color="error"
-            :variant="computedButtonVariant"
+            variant="text"
+            :prepend-icon="mdiDeleteOutline"
             :loading="isDeleting"
             @click="remove"
           >
-            delete
+            Delete
           </v-btn>
-          <v-btn type="submit" :color="'success'" :variant="computedButtonVariant" :loading="isSaving" class="flex-1">
-            save
-          </v-btn>
+          <v-spacer />
+          <v-btn variant="text" @click="$emit('cancelClicked')">Cancel</v-btn>
+          <v-btn type="submit" color="primary" variant="flat" :loading="isSaving">Save</v-btn>
         </v-card-actions>
       </v-form>
     </v-card>
@@ -68,10 +63,15 @@
 </template>
 
 <script setup lang="ts">
-import { PropType } from 'vue'
-import { useTheme } from 'vuetify'
+import { mdiClose, mdiDeleteOutline } from '@mdi/js'
 import { ConsumerInput, useMainStore } from '~/stores/main'
-const theme = useTheme()
+
+const MODES = [
+  { title: 'Auto: switched by the surplus', value: 'auto' },
+  { title: 'Always on', value: 'on' },
+  { title: 'Always off', value: 'off' }
+]
+
 const mainStore = useMainStore()
 const shelly = useShelly()
 
@@ -79,11 +79,6 @@ const props = defineProps({
   modelValue: {
     type: Boolean,
     required: true
-  },
-  buttonVariant: {
-    type: String as PropType<'flat' | 'tonal' | 'text' | 'elevated' | 'outlined' | 'plain' | undefined>,
-    required: false,
-    default: undefined
   },
   consumerName: {
     type: String,
@@ -149,12 +144,6 @@ async function remove() {
     isDeleting.value = false
   }
 }
-
-const computedButtonVariant = computed(() => {
-  if (props.buttonVariant) return props.buttonVariant
-  else if (theme.global.current.value.dark) return 'tonal'
-  return 'flat'
-})
 </script>
 <style scoped>
 .flex-1 {

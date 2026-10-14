@@ -45,7 +45,6 @@
     "nuxt": "^3.1",
     "pinia": "^2.0.23",
     "pinia-plugin-persistedstate": "^3.0.2",
-    "vue-chartjs": "^5.3.2",
     "vuedraggable": "4",
     "vuetify": "^3.1"
   }

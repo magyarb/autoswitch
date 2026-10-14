@@ -1,18 +1,7 @@
-import { Consumer, ConsumerInput, useMainStore } from '~/stores/main'
+import { ConsumerInput, ControllerData, useMainStore } from '~/stores/main'
 
-export type ControllerData = {
-  a_consumption: number
-  b_consumption: number
-  c_consumption: number
-  a_production: number
-  b_production: number
-  c_production: number
-  meters_ok: boolean
-  consumers: Consumer[]
-}
-
-export type EmDataPage = {
-  keys: string[]
+export type EnergyPage = {
+  keys?: string[]
   data: {
     ts: number
     period: number
@@ -21,17 +10,33 @@ export type EmDataPage = {
   next_record_ts?: number
 }
 
+// The device answered, but with an error (e.g. a method older firmware doesn't have).
+export class ShellyHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+  }
+}
+
 const TIMEOUT_MS = 5000
-const EM_DATA_TIMEOUT_MS = 20000
+const ENERGY_TIMEOUT_MS = 15000
 
 async function request<T>(url: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS): Promise<T> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch(url, { ...init, signal: controller.signal })
-    const body = await response.json()
-    if (!response.ok) throw new Error(body?.error ?? `HTTP ${response.status}`)
-    return body
+    if (!response.ok) {
+      const text = await response.text()
+      let message = `HTTP ${response.status}`
+      try {
+        const body = JSON.parse(text)
+        message = body.error ?? body.message ?? message
+      } catch {
+        if (text) message = text
+      }
+      throw new ShellyHttpError(message, response.status)
+    }
+    return await response.json()
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw new Error(`${url} timed out`)
     throw e
@@ -64,7 +69,16 @@ export function useShelly() {
       post('setConsumer', { ...consumer, original_name: originalName }),
     deleteConsumer: (name: string) => post('deleteConsumer', { name }),
     setOrder: (names: string[]) => post('setOrder', { names }),
-    getEmData: (ip: string, ts: number, endTs: number) =>
-      request<EmDataPage>(`http://${ip}/rpc/EMData.GetData?id=0&ts=${ts}&end_ts=${endTs}`, {}, EM_DATA_TIMEOUT_MS)
+    // net energy per phase, pre-aggregated by the meter: 3 values per record
+    getNetEnergies: (ip: string, query: { ts: number; endTs: number; period: number; addKeys: boolean }) =>
+      request<EnergyPage>(
+        `http://${ip}/rpc/EMData.GetNetEnergies?id=0&ts=${query.ts}&end_ts=${query.endTs}` +
+          `&period=${query.period}&add_keys=${query.addKeys}`,
+        {},
+        ENERGY_TIMEOUT_MS
+      ),
+    // raw 1-minute records with 51 values each; only used when GetNetEnergies isn't available
+    getData1m: (ip: string, ts: number, endTs: number) =>
+      request<EnergyPage>(`http://${ip}/rpc/EMData.GetData?id=0&ts=${ts}&end_ts=${endTs}`, {}, ENERGY_TIMEOUT_MS)
   }
 }

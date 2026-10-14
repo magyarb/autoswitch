@@ -1,19 +1,20 @@
 <template>
   <v-app>
-    <v-app-bar :style="{ width: '100vw' }">
-      <nuxt-link to="/" class="mainlogo">
-        <v-toolbar-title>Autoswitch</v-toolbar-title>
+    <v-app-bar flat density="comfortable" class="app-bar">
+      <nuxt-link to="/" class="brand">
+        <v-icon :icon="mdiSolarPowerVariantOutline" color="primary" />
+        <span>Autoswitch</span>
       </nuxt-link>
 
       <v-spacer />
-      <v-toolbar-items class="pr-4">
-        <v-btn @click="switchTheme">
-          <v-icon small>$mdi-brightness-6</v-icon>
-        </v-btn>
-        <v-btn @click="settingsDialog = true">
-          <v-icon small>$mdi-cog</v-icon>
-        </v-btn>
-      </v-toolbar-items>
+      <ConnectionStatus />
+      <v-btn
+        :icon="mainStore.theme === 'dark' ? mdiWhiteBalanceSunny : mdiWeatherNight"
+        variant="text"
+        aria-label="Switch theme"
+        @click="mainStore.theme = mainStore.theme === 'dark' ? 'light' : 'dark'"
+      />
+      <v-btn :icon="mdiCogOutline" variant="text" class="mr-2" aria-label="Settings" @click="settingsDialog = true" />
     </v-app-bar>
 
     <SettingsDialog
@@ -22,8 +23,8 @@
       @confirm-clicked="settingsDialog = false"
     />
 
-    <v-main :style="{ '--v-layout-top': '64px' }">
-      <v-container>
+    <v-main>
+      <v-container fluid class="py-6 px-4 px-md-8">
         <slot />
       </v-container>
     </v-main>
@@ -31,113 +32,36 @@
 </template>
 
 <script setup lang="ts">
+import { mdiCogOutline, mdiSolarPowerVariantOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { useTheme } from 'vuetify'
+import ConnectionStatus from '~/components/ConnectionStatus.vue'
 import SettingsDialog from '~/components/SettingsDialog.vue'
+import { useMainStore } from '~/stores/main'
+
 const theme = useTheme()
-
-const setTheme = function (val: string) {
-  theme.global.name.value = val
-}
-
+const mainStore = useMainStore()
 const settingsDialog = ref(false)
 
-const switchTheme = function () {
-  setTheme(theme.global.name.value === 'dark' ? 'light' : 'dark')
-}
+watch(
+  () => mainStore.theme,
+  name => (theme.global.name.value = name),
+  { immediate: true }
+)
 </script>
+
 <style scoped>
-.container {
+.app-bar {
+  border-bottom: 1px solid var(--viz-hairline);
+}
+
+.brand {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-height: calc(100vh - 64px);
-}
-
-@media screen and (max-width: 960px) {
-  .container {
-    min-height: calc(100vh - 56px);
-  }
-}
-
-.mainlogo {
-  font-family: Roboto, sans-serif !important;
+  gap: 10px;
   margin-left: 20px;
-  font-size: 24px;
+  font-size: 18px;
+  font-weight: 600;
   text-decoration: none;
-  color: inherit !important;
-}
-</style>
-
-<style>
-.v-avatar .v-icon,
-.v-avatar .v-image,
-.v-avatar .v-responsive__content,
-.v-avatar img,
-.v-avatar svg {
-  border-radius: inherit;
-  display: inline-flex;
-  height: inherit;
-  width: inherit;
-}
-
-.v-btn {
-  letter-spacing: 0.05em !important;
-}
-
-.router-link-active {
-  text-decoration: none;
-  color: inherit !important;
-}
-
-html {
-  overflow-y: auto;
-}
-
-::-webkit-scrollbar {
-  width: 3px;
-}
-
-::-webkit-scrollbar-track {
-  background: #efefef00;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #888;
-}
-
-html,
-body {
-  min-height: 100%;
-  min-height: 100vh;
-  min-height: stretch;
-}
-
-body {
-  height: 100%;
-}
-
-div#__nuxt {
-  height: 100%;
-}
-
-div#__layout {
-  height: 100%;
-}
-
-div.v-application {
-  height: 100%;
-}
-
-div.v-application--wrap {
-  height: 100%;
-  min-height: 100% !important;
-}
-
-main.v-main {
-  height: 100%;
-}
-div {
-  color-scheme: auto;
+  color: inherit;
 }
 </style>

@@ -11,7 +11,7 @@ export default defineNuxtConfig({
         'width=device-width, initial-scale=1, maximum-scale=1, height=device-height, user-scalable=no, minimal-ui'
     }
   },
-  css: ['vuetify/styles'],
+  css: ['vuetify/styles', '~/assets/main.css'],
   vite: {
     ssr: {
       noExternal: ['vuetify']
