@@ -1,3 +1,5 @@
+import { useMainStore } from '~/stores/main'
+
 // Sends errors, page views and the app's own events (logEvent) to Dash0.
 // Off unless NUXT_PUBLIC_DASH0_ENDPOINT and NUXT_PUBLIC_DASH0_AUTH_TOKEN are set.
 export default defineNuxtPlugin(() => {
@@ -15,5 +17,10 @@ export default defineNuxtPlugin(() => {
       ignoreUrls: [/\/script\/\d+\/(getCData|getLog)$/]
     })
     setTelemetrySdk(sdk)
+    // one entry per visit, so every open shows up even when nothing goes wrong
+    const mainStore = useMainStore()
+    logEvent('app.opened', `Autoswitch ${version} opened`, {
+      attributes: { 'page.path': location.pathname, 'controller.ip': mainStore.controllerIp }
+    })
   })
 })
