@@ -11,6 +11,9 @@ let consumption_device_ip = '192.168.0.49'
 let production_device_ip = '192.168.0.40'
 let controller_ip = '192.168.0.40'
 
+// The app fills in these values when it installs the script (Devices page).
+let SCRIPT_VERSION = 'dev'
+
 let CYCLE_MS = 5000 // the control loop runs this often
 let HTTP_TIMEOUT = 3 // seconds, for every HTTP.GET
 let ON_RATIO = 0.8 // turn on when surplus > max_consumption * ON_RATIO
@@ -20,6 +23,7 @@ let MIN_SWITCH_TICKS = 12 // min time between automatic switches of one consumer
 let SETTLE_TICKS = 2 // after a switch, wait this many cycles before deciding again on that phase
 let WATCHDOG_TICKS = 24 // start a new cycle if the previous one hangs this long (24 * 5 s = 120 s)
 let KVS_PREFIX = 'autoswitch_'
+let LOG_SIZE = 30 // events kept for the app's activity log
 
 // Used only on first start, when nothing is saved in KVS yet.
 // Order = priority: the first consumer is turned on first and turned off last.
@@ -55,6 +59,45 @@ let phase_last_switch = { A: -1000, B: -1000, C: -1000 }
 
 let saving = false
 let save_again = false
+
+let log_entries = []
+let log_seq = 0
+let log_forwarded_seq = 0 // last event the app has forwarded to its log service
+let boot_id = ''
+let meters_state = 'unknown' // unknown | ok | failed
+
+// ---- activity log ----------------------------------------------------------
+//
+// The last LOG_SIZE events, served by getLog; everything is printed as well.
+
+function now_unix() {
+  let sys = Shelly.getComponentStatus('sys')
+  return sys && sys.unixtime ? sys.unixtime : null
+}
+
+function log_event(level, message) {
+  log_seq++
+  log_entries.push({ seq: log_seq, ts: now_unix(), level: level, msg: message })
+  if (log_entries.length > LOG_SIZE) {
+    let kept = []
+    for (let i = 1; i < log_entries.length; i++) kept.push(log_entries[i])
+    log_entries = kept
+  }
+  print('[' + level + '] ' + message)
+}
+
+// logs only when a consumer goes offline or comes back, not on every poll
+function set_online(c, online) {
+  if (!online && !c.offline_logged) {
+    log_event('warn', c.name + ' (' + c.ip + ') is unreachable')
+    c.offline_logged = true
+  }
+  if (online && c.offline_logged) {
+    log_event('info', c.name + ' is reachable again')
+    c.offline_logged = false
+  }
+  c.online = online
+}
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -116,7 +159,7 @@ function read_em(ip, cb) {
 function set_relay(c, on, cb) {
   if (c.ip === controller_ip) {
     Shelly.call('Switch.Set', { id: 0, on: on }, function (result, error_code) {
-      c.online = error_code === 0
+      set_online(c, error_code === 0)
       if (c.online) c.status = on ? 'on' : 'off'
       cb(c.online)
     })
@@ -127,7 +170,7 @@ function set_relay(c, on, cb) {
     { url: 'http://' + c.ip + '/relay/0?turn=' + (on ? 'on' : 'off'), timeout: HTTP_TIMEOUT },
     function (result, error_code) {
       let relay = get_json(result, error_code)
-      c.online = !!relay && relay.ison !== undefined
+      set_online(c, !!relay && relay.ison !== undefined)
       if (c.online) c.status = relay.ison ? 'on' : 'off'
       cb(c.online && relay.ison === on)
     }
@@ -148,7 +191,7 @@ function cycle() {
 // Also called directly to apply a manual change right away instead of on the next tick.
 function start_cycle() {
   if (busy && tick - busy_since < WATCHDOG_TICKS) return
-  if (busy) print('[cycle] previous cycle did not finish, starting a new one')
+  if (busy) log_event('warn', 'previous control cycle did not finish, starting a new one')
   busy = true
   busy_since = tick
   cycle_id++
@@ -167,7 +210,12 @@ function start_cycle() {
         c_consumption = consumption.c_act_power
       }
       meters_ok = !!production && !!consumption
-      if (!meters_ok) print('[cycle] meter read failed, skipping automatic decisions')
+      if (!meters_ok && meters_state !== 'failed') {
+        log_event('error', 'cannot read the energy meters, automatic switching is paused')
+        meters_state = 'failed'
+      }
+      if (meters_ok && meters_state === 'failed') log_event('info', 'energy meters readable again')
+      if (meters_ok) meters_state = 'ok'
 
       let actions = []
       decide_phase('A', a_production - a_consumption, actions)
@@ -217,7 +265,7 @@ function decide_phase(phase, available, actions) {
       let c = auto_list[i]
       if (c.status === 'on' || !can_switch(c)) continue
       if (c.max_consumption * ON_RATIO < available) {
-        print('[auto] phase', phase, available, 'W available, turning on', c.name)
+        log_event('info', 'turning on ' + c.name + ' (phase ' + phase + ', ' + Math.round(available) + ' W surplus)')
         actions.push({ consumer: c, on: true })
         return
       }
@@ -234,7 +282,7 @@ function decide_phase(phase, available, actions) {
       let draw = drawn_power(c)
       if (draw < IDLE_W) continue // switching an idle consumer off would not help
       if (draw * OFF_RATIO < -available && can_switch(c)) {
-        print('[auto] phase', phase, available, 'W available, turning off', c.name)
+        log_event('info', 'turning off ' + c.name + ' (phase ' + phase + ', ' + Math.round(-available) + ' W deficit)')
         actions.push({ consumer: c, on: false })
       }
       return
@@ -255,7 +303,7 @@ function run_actions(actions, i, done) {
       phase_last_switch[c.phase] = tick
       if (c.mode === (on ? 'on' : 'off')) c.pending = false
     } else {
-      print('[relay] failed to switch', c.name, on ? 'on' : 'off')
+      log_event('warn', 'failed to switch ' + c.name + (on ? ' on' : ' off'))
     }
     run_actions(actions, i + 1, done)
   })
@@ -271,7 +319,7 @@ function poll_status(id, i) {
 
   if (c.ip === controller_ip) {
     Shelly.call('Switch.GetStatus', { id: 0 }, function (result, error_code) {
-      c.online = error_code === 0 && !!result
+      set_online(c, error_code === 0 && !!result)
       if (c.online) {
         c.status = result.output ? 'on' : 'off'
         c.current_consumption = result.apower === undefined ? null : result.apower
@@ -284,7 +332,7 @@ function poll_status(id, i) {
   Shelly.call('HTTP.GET', { url: 'http://' + c.ip + '/meter/0', timeout: HTTP_TIMEOUT }, function (result, error_code) {
     if (error_code !== 0) {
       // unreachable: don't wait for a second timeout on /relay/0
-      c.online = false
+      set_online(c, false)
       c.current_consumption = null
       poll_status(id, i + 1)
       return
@@ -298,7 +346,7 @@ function poll_status(id, i) {
       { url: 'http://' + c.ip + '/relay/0', timeout: HTTP_TIMEOUT },
       function (result2, error_code2) {
         let relay = get_json(result2, error_code2)
-        c.online = !!relay && relay.ison !== undefined
+        set_online(c, !!relay && relay.ison !== undefined)
         if (c.online) c.status = relay.ison ? 'on' : 'off'
         poll_status(id, i + 1)
       }
@@ -323,7 +371,7 @@ function save_consumers() {
 function save_consumer(i) {
   if (i >= consumers.length) {
     Shelly.call('KVS.Set', { key: KVS_PREFIX + 'count', value: '' + consumers.length }, function (result, error_code) {
-      if (error_code !== 0) print('[kvs] failed to save count', error_code)
+      if (error_code !== 0) log_event('error', 'could not save the consumer list (' + error_code + ')')
       saving = false
       if (save_again) {
         save_again = false
@@ -341,7 +389,7 @@ function save_consumer(i) {
     mode: c.mode
   })
   Shelly.call('KVS.Set', { key: KVS_PREFIX + i, value: value }, function (result, error_code) {
-    if (error_code !== 0) print('[kvs] failed to save', c.name, error_code)
+    if (error_code !== 0) log_event('error', 'could not save ' + c.name + ' (' + error_code + ')')
     save_consumer(i + 1)
   })
 }
@@ -349,7 +397,7 @@ function save_consumer(i) {
 function load_consumers(done) {
   Shelly.call('KVS.Get', { key: KVS_PREFIX + 'count' }, function (result, error_code) {
     if (error_code !== 0 || !result || !result.value) {
-      print('[kvs] nothing saved yet, using the default consumers')
+      log_event('info', 'no saved consumers yet, using the default list')
       for (let i = 0; i < default_consumers.length; i++) {
         consumers.push(make_consumer(default_consumers[i]))
       }
@@ -370,7 +418,7 @@ function load_consumer(i, count, list, done) {
   }
   Shelly.call('KVS.Get', { key: KVS_PREFIX + i }, function (result, error_code) {
     if (error_code === 0 && result && result.value) list.push(make_consumer(JSON.parse(result.value)))
-    else print('[kvs] could not load consumer', i, error_code)
+    else log_event('error', 'could not load saved consumer ' + i + ' (' + error_code + ')')
     load_consumer(i + 1, count, list, done)
   })
 }
@@ -378,6 +426,8 @@ function load_consumer(i, count, list, done) {
 // ---- HTTP API --------------------------------------------------------------
 //
 // GET  /script/<id>/getCData        measurements and consumers
+// GET  /script/<id>/getLog          recent activity (the last LOG_SIZE events)
+// POST /script/<id>/ackLog          { seq } events up to seq were forwarded by the app
 // POST /script/<id>/setConsumer     add, or edit when original_name is sent
 // POST /script/<id>/deleteConsumer  { name }
 // POST /script/<id>/setOrder        { names: [...] } highest priority first
@@ -430,8 +480,22 @@ function handle_get_data(request, response) {
     b_production: b_production,
     c_production: c_production,
     meters_ok: meters_ok,
+    script_version: SCRIPT_VERSION,
     consumers: consumers
   })
+}
+
+function handle_get_log(request, response) {
+  send_json(response, 200, { boot_id: boot_id, seq: log_seq, forwarded_seq: log_forwarded_seq, entries: log_entries })
+}
+
+// the app reports which events it has forwarded, so other open browsers don't send them again
+function handle_ack_log(request, response) {
+  let body = read_body(request, response)
+  if (!body) return
+  let seq = body.seq * 1
+  if (seq > log_forwarded_seq && seq <= log_seq) log_forwarded_seq = seq
+  send_json(response, 200, { status: 'ok', forwarded_seq: log_forwarded_seq })
 }
 
 function handle_set_consumer(request, response) {
@@ -459,14 +523,17 @@ function handle_set_consumer(request, response) {
   if (!c) {
     c = make_consumer(body)
     consumers.push(c)
-    print('[api] added', c.name)
+    log_event('info', 'added ' + c.name)
   } else {
     if (c.ip !== body.ip) {
       c.online = false
       c.status = 'unknown'
       c.current_consumption = null
     }
-    if (c.mode !== body.mode) c.pending = body.mode !== 'auto'
+    if (c.mode !== body.mode) {
+      c.pending = body.mode !== 'auto'
+      log_event('info', c.name + ' set to ' + body.mode)
+    }
     c.name = body.name
     c.ip = body.ip
     c.max_consumption = body.max_consumption
@@ -491,7 +558,7 @@ function handle_delete_consumer(request, response) {
     return
   }
   consumers = kept
-  print('[api] deleted', body.name)
+  log_event('info', 'deleted ' + body.name)
   save_consumers()
   send_json(response, 200, { status: 'ok' })
 }
@@ -513,6 +580,7 @@ function handle_set_order(request, response) {
     if (!contains(ordered, consumers[i])) ordered.push(consumers[i])
   }
   consumers = ordered
+  log_event('info', 'priority order changed')
   save_consumers()
   send_json(response, 200, { status: 'ok' })
 }
@@ -520,7 +588,10 @@ function handle_set_order(request, response) {
 // ---- start -----------------------------------------------------------------
 
 function start() {
+  log_event('info', 'autoswitch ' + SCRIPT_VERSION + ' started with ' + consumers.length + ' consumers')
   HTTPServer.registerEndpoint('getCData', handle_get_data)
+  HTTPServer.registerEndpoint('getLog', handle_get_log)
+  HTTPServer.registerEndpoint('ackLog', handle_ack_log)
   HTTPServer.registerEndpoint('setConsumer', handle_set_consumer)
   HTTPServer.registerEndpoint('deleteConsumer', handle_delete_consumer)
   HTTPServer.registerEndpoint('setOrder', handle_set_order)
@@ -528,4 +599,6 @@ function start() {
   cycle()
 }
 
+let sys = Shelly.getComponentStatus('sys')
+boot_id = sys && sys.unixtime ? '' + sys.unixtime : 'u' + (sys ? sys.uptime : 0)
 load_consumers(start)
