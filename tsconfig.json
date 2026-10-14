@@ -1,4 +1,8 @@
 {
   // https://nuxt.com/docs/guide/concepts/typescript
-  "extends": "./.nuxt/tsconfig.json"
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    // the generated paths are relative to .nuxt; the eslint import resolver needs an explicit baseUrl
+    "baseUrl": ".nuxt"
+  }
 }

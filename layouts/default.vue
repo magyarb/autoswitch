@@ -1,8 +1,7 @@
 <template>
   <v-app>
-    <v-app-bar :clipped-left="clipped" :style="{ width: '100vw' }">
-      <!--v-app-bar-nav-icon @click.stop="drawer = !drawer" /-->
-      <nuxt-link :to="localePath('/')" class="mainlogo">
+    <v-app-bar :style="{ width: '100vw' }">
+      <nuxt-link to="/" class="mainlogo">
         <v-toolbar-title>Autoswitch</v-toolbar-title>
       </nuxt-link>
 
@@ -16,10 +15,6 @@
         </v-btn>
       </v-toolbar-items>
     </v-app-bar>
-
-    <v-navigation-drawer v-model="drawer" disable-resize-watcher app :clipped="clipped" :temporary="!clipped">
-      <v-list nav> </v-list>
-    </v-navigation-drawer>
 
     <SettingsDialog
       v-model="settingsDialog"
@@ -37,24 +32,14 @@
 
 <script setup lang="ts">
 import { useTheme } from 'vuetify'
-// import { useMainStore } from '~/stores/main'
 import SettingsDialog from '~/components/SettingsDialog.vue'
 const theme = useTheme()
-
-const localePath = useLocalePath()
-// const mainStore = useMainStore()
-const drawer = ref(false)
-const clipped = ref(false)
 
 const setTheme = function (val: string) {
   theme.global.name.value = val
 }
 
 const settingsDialog = ref(false)
-
-onMounted(() => {
-  // if (mainStore.controllerIp === null) settingsDialog.value = true
-})
 
 const switchTheme = function () {
   setTheme(theme.global.name.value === 'dark' ? 'light' : 'dark')
@@ -82,29 +67,6 @@ const switchTheme = function () {
   text-decoration: none;
   color: inherit !important;
 }
-
-.flag-icon {
-  background-size: contain;
-  background-position: 50%;
-  background-repeat: no-repeat;
-  position: relative;
-  display: inline-block;
-  width: 1.3333em;
-  line-height: 1em;
-  height: 1em;
-}
-
-.flag-icon-hu {
-  background-image: url('@/assets/hu.svg');
-}
-
-.flag-icon-gb {
-  background-image: url('@/assets/gb.svg');
-}
-
-.flag-icon-de {
-  background-image: url('@/assets/de.svg');
-}
 </style>
 
 <style>
@@ -117,10 +79,6 @@ const switchTheme = function () {
   display: inline-flex;
   height: inherit;
   width: inherit;
-}
-
-div#credential_picker_container {
-  top: 70px !important;
 }
 
 .v-btn {

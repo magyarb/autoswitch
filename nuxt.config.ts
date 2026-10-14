@@ -2,6 +2,8 @@ import vuetify from 'vite-plugin-vuetify'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  // everything talks to the Shelly devices from the browser, there is nothing to render on a server
+  ssr: false,
   app: {
     head: {
       title: 'Autoswitch',
@@ -22,7 +24,7 @@ export default defineNuxtConfig({
     icon: {
       source: 'assets/icon.png',
       maskableSource: 'assets/icon.maskable.png',
-      maskablePadding: 5,
+      maskablePadding: 0,
       targetDir: 'icons'
     },
     workbox: {
@@ -31,7 +33,7 @@ export default defineNuxtConfig({
     manifest: {
       name: 'Autoswitch',
       short_name: 'Autoswitch',
-      description: '',
+      description: 'Switches Shelly consumers on and off to use solar surplus',
       id: 'com.autoswitch.webapp',
       display: 'standalone',
       background_color: '#212121',
@@ -48,33 +50,6 @@ export default defineNuxtConfig({
     },
     '@pinia/nuxt',
     '@pinia-plugin-persistedstate/nuxt',
-    '@kevinmarrec/nuxt-pwa',
-    [
-      '@nuxtjs/i18n',
-      {
-        defaultLocale: 'en',
-        strategy: 'prefix_and_default',
-        locales: [
-          {
-            code: 'en',
-            iso: 'en',
-            file: 'en.json',
-            isCatchallLocale: true
-          },
-          {
-            code: 'hu',
-            iso: 'hu-HU',
-            file: 'hu.json'
-          },
-          {
-            code: 'de',
-            iso: 'de-DE',
-            file: 'de.json'
-          }
-        ],
-        lazy: false,
-        langDir: 'locales/'
-      }
-    ]
+    '@kevinmarrec/nuxt-pwa'
   ]
 })
