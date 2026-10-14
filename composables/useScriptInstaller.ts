@@ -88,6 +88,12 @@ export function useScriptInstaller() {
       } catch {
         // still starting
       }
+      // a crash during startup would otherwise only show up as a timeout
+      const status = await rpc<{ running: boolean; errors?: string[] }>(ip, 'Script.GetStatus', { id })
+      if (!status.running) {
+        const reason = status.errors?.length ? ` (${status.errors.join(', ')})` : ''
+        throw new Error(`The new script stopped right after starting${reason}`)
+      }
       await sleep(1000)
     }
     throw new Error('The new script did not answer within 30 s')
