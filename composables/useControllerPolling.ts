@@ -32,6 +32,9 @@ export function useControllerPolling(canReplaceConsumers: () => boolean) {
   async function load() {
     try {
       const data = await shelly.getData()
+      if (mainStore.loadError) {
+        logEvent('controller.reachable', `Controller ${mainStore.controllerIp} is reachable again`)
+      }
       mainStore.data = data
       mainStore.lastUpdated = Date.now()
       mainStore.loadError = null
@@ -39,6 +42,16 @@ export function useControllerPolling(canReplaceConsumers: () => boolean) {
       const snapshot: Snapshot = { controllerIp: mainStore.controllerIp, ts: Date.now(), data }
       localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot))
     } catch (e) {
+      // only the change is logged, not every failed poll
+      if (!mainStore.loadError) {
+        logEvent(
+          'controller.unreachable',
+          `Cannot reach the controller ${mainStore.controllerIp}: ${errorMessage(e)}`,
+          {
+            severity: 'ERROR'
+          }
+        )
+      }
       mainStore.loadError = errorMessage(e)
     }
   }

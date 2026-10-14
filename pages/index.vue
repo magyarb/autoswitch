@@ -13,6 +13,14 @@
       The controller cannot read the energy meters, automatic switching is paused.
     </v-alert>
 
+    <v-alert v-if="isScriptOutdated" type="info" variant="tonal" density="compact" class="mb-4" :icon="mdiUpdate">
+      <div class="d-flex align-center flex-wrap ga-2">
+        <span>A new version of the controller script is available.</span>
+        <v-spacer />
+        <v-btn to="/devices" size="small" variant="flat" color="info">Open Devices</v-btn>
+      </div>
+    </v-alert>
+
     <PowerOverview :data="mainStore.data" :consumers="mainStore.consumers" :is-stale="isStale" />
 
     <EnergyHistory class="mt-8" />
@@ -46,12 +54,13 @@
 </template>
 
 <script setup lang="ts">
-import { mdiPlus } from '@mdi/js'
+import { mdiPlus, mdiUpdate } from '@mdi/js'
 import ConsumerDialog from '~/components/ConsumerDialog.vue'
 import ConsumerList from '~/components/ConsumerList.vue'
 import EnergyHistory from '~/components/EnergyHistory.vue'
 import PowerOverview from '~/components/PowerOverview.vue'
 import { Consumer, ConsumerMode, useMainStore } from '~/stores/main'
+import { BUNDLED_SCRIPT_VERSION } from '~/utils/scriptBundle'
 
 // data older than this is shown dimmed (e.g. restored from the last visit)
 const STALE_MS = 15000
@@ -75,14 +84,18 @@ const showActionError = computed({
 const { refresh } = useControllerPolling(() => !isDragging.value && !consumerDialog.value && pendingWrites.value === 0)
 
 const now = useNow()
+const isScriptOutdated = computed(() => !!mainStore.data && mainStore.data.script_version !== BUNDLED_SCRIPT_VERSION)
 const isStale = computed(() => !mainStore.lastUpdated || now.value - mainStore.lastUpdated > STALE_MS)
 
-async function write(action: () => Promise<unknown>) {
+// name and title describe the change for the event log
+async function write(name: string, title: string, action: () => Promise<unknown>) {
   pendingWrites.value++
   try {
     await action()
+    logEvent(name, title)
   } catch (e) {
     actionError.value = errorMessage(e)
+    logEvent(`${name}_failed`, `${title} failed: ${actionError.value}`, { severity: 'ERROR' })
   } finally {
     pendingWrites.value--
   }
@@ -93,12 +106,15 @@ function changeMode(consumer: Consumer, mode: ConsumerMode) {
   const { name, ip, max_consumption: maxConsumption, phase } = consumer
   consumer.mode = mode
   consumer.pending = mode !== 'auto'
-  write(() => shelly.setConsumer({ name, ip, max_consumption: maxConsumption, phase, mode }, name))
+  write('consumer.mode_changed', `${name} set to ${mode}`, () =>
+    shelly.setConsumer({ name, ip, max_consumption: maxConsumption, phase, mode }, name)
+  )
 }
 
 function orderChanged() {
   isDragging.value = false
-  write(() => shelly.setOrder(mainStore.consumers.map(c => c.name)))
+  const names = mainStore.consumers.map(c => c.name)
+  write('consumer.order_changed', `Priority changed: ${names.join(', ')}`, () => shelly.setOrder(names))
 }
 
 function addConsumer() {

@@ -27,6 +27,8 @@ export type ControllerData = {
   b_production: number
   c_production: number
   meters_ok: boolean
+  // version of the installed controller script; missing on scripts older than the in-app installer
+  script_version?: string
   consumers: Consumer[]
 }
 

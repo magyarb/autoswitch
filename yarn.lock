@@ -317,6 +317,13 @@
   resolved "https://registry.yarnpkg.com/@csstools/selector-specificity/-/selector-specificity-2.2.0.tgz#2cbcf822bf3764c9658c4d2e568bd0c0cb748016"
   integrity sha512-+OJ9konv95ClSTOJCmMZqpd5+YGsB2S+x6w3E1oaM8UuR5j8nTNHYSz8c9BEPGDOCMQYIEEGlVPj/VY64iTbGw==
 
+"@dash0/sdk-web@^0.27.0":
+  version "0.27.0"
+  resolved "https://registry.yarnpkg.com/@dash0/sdk-web/-/sdk-web-0.27.0.tgz#c8caa5533f9d02f62c36ffb471a9dec528bf2c48"
+  integrity sha512-N18uQyBVKi/bPgs1kQzHwkz6t1hcwWy/WC2CTioNbVNmNjgatgED1mk1vWXzz9Gy2ysNbLS+l1r5Ll2ipM8JJw==
+  dependencies:
+    web-vitals "^5.0.3"
+
 "@esbuild/android-arm64@0.18.20":
   version "0.18.20"
   resolved "https://registry.yarnpkg.com/@esbuild/android-arm64/-/android-arm64-0.18.20.tgz#984b4f9c8d0377443cc2dfcef266d02244593622"
@@ -6723,6 +6730,11 @@ vuetify@^3.1:
   version "3.3.20"
   resolved "https://registry.yarnpkg.com/vuetify/-/vuetify-3.3.20.tgz#1362e121b49730bac6e96880b23c1e8da28ae0ba"
   integrity sha512-7z3rv1j94WXO1y9CYQXygtCuct0bJNPao0T5no95c++atvPf5+WfgvnYK+XrMyjq4Y0xe6z5mhJfv9taeVelpQ==
+
+web-vitals@^5.0.3:
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/web-vitals/-/web-vitals-5.3.0.tgz#a67f57f229fdf68be99eb99d3725946def284ff3"
+  integrity sha512-q6LWsLatGYZp5VGBIOvbTj6JBV2nOmC8KvWztXBmwJcfFAzhwKwbOxhUH306XY3CcaZDUlSmSuNPBsCn0bFu+g==
 
 webidl-conversions@^3.0.0:
   version "3.0.1"

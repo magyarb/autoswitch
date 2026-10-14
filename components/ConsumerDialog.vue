@@ -122,10 +122,21 @@ async function save() {
   isSaving.value = true
   saveError.value = null
   try {
-    await shelly.setConsumer(editedItem.value as ConsumerInput, props.consumerName)
+    const consumer = editedItem.value as ConsumerInput
+    await shelly.setConsumer(consumer, props.consumerName)
+    logEvent(
+      props.consumerName ? 'consumer.updated' : 'consumer.added',
+      props.consumerName ? `${props.consumerName} updated` : `${consumer.name} added`,
+      {
+        attributes: { 'consumer.name': consumer.name, 'consumer.phase': consumer.phase, 'consumer.mode': consumer.mode }
+      }
+    )
     emits('confirmClicked')
   } catch (e) {
     saveError.value = errorMessage(e)
+    logEvent('consumer.save_failed', `Saving ${editedItem.value.name} failed: ${saveError.value}`, {
+      severity: 'ERROR'
+    })
   } finally {
     isSaving.value = false
   }
@@ -137,9 +148,13 @@ async function remove() {
   saveError.value = null
   try {
     await shelly.deleteConsumer(props.consumerName)
+    logEvent('consumer.deleted', `${props.consumerName} deleted`)
     emits('confirmClicked')
   } catch (e) {
     saveError.value = errorMessage(e)
+    logEvent('consumer.delete_failed', `Deleting ${props.consumerName} failed: ${saveError.value}`, {
+      severity: 'ERROR'
+    })
   } finally {
     isDeleting.value = false
   }
