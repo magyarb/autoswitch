@@ -155,6 +155,10 @@ export function useEnergyHistory(range: Ref<HistoryRange>) {
         // only fall back when the device answered; a timeout means it is unreachable
         if (!(e instanceof ShellyHttpError) || supportsNetEnergies.get(ip)) throw e
         supportsNetEnergies.set(ip, false)
+        logEvent('history.legacy_fallback', `${ip} has no EMData.GetNetEnergies, loading 1-minute records instead`, {
+          severity: 'WARN',
+          attributes: { 'device.ip': ip, error: errorMessage(e) }
+        })
       }
     }
     return fetchLegacy(ip, query)
@@ -219,6 +223,7 @@ export function useEnergyHistory(range: Ref<HistoryRange>) {
     } catch (e) {
       if (e instanceof Cancelled || !isCurrent()) return
       loadError.value = `Could not load the history: ${errorMessage(e)}`
+      logEvent('history.load_failed', loadError.value, { severity: 'WARN', attributes: { range: range.value } })
     } finally {
       if (isCurrent()) isLoading.value = false
     }

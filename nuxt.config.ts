@@ -12,6 +12,14 @@ export default defineNuxtConfig({
     }
   },
   css: ['vuetify/styles', '~/assets/main.css'],
+  runtimeConfig: {
+    public: {
+      // NUXT_PUBLIC_DASH0_ENDPOINT / _AUTH_TOKEN / _DATASET; telemetry is off when empty
+      dash0: { endpoint: '', authToken: '', dataset: '' },
+      version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev',
+      environment: process.env.VERCEL_ENV ?? 'local'
+    }
+  },
   vite: {
     ssr: {
       noExternal: ['vuetify']
