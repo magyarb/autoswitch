@@ -156,7 +156,7 @@ function read_em(ip, id, cb) {
     Shelly.call('EM.GetStatus', { id: 0 }, function (result, error_code) {
       cb(error_code === 0 && result ? result : null, id)
     })
-    return
+    return null
   }
   Shelly.call(
     'HTTP.GET',
@@ -175,7 +175,7 @@ function set_relay(c, on, cb) {
       if (c.online) c.status = on ? 'on' : 'off'
       cb(c.online)
     })
-    return
+    return null
   }
   Shelly.call(
     'HTTP.GET',
@@ -202,7 +202,7 @@ function cycle() {
 
 // Also called directly to apply a manual change right away instead of on the next tick.
 function start_cycle() {
-  if (busy && tick - busy_since < WATCHDOG_TICKS) return
+  if (busy && tick - busy_since < WATCHDOG_TICKS) return null
   if (busy) log_event('warn', 'previous control cycle did not finish, starting a new one')
   busy = true
   busy_since = tick
@@ -271,8 +271,8 @@ function decide_phase(phase, available, actions) {
   }
 
   // one change per phase per cycle, and let the meters settle after a switch
-  if (manual_action || !meters_ok) return
-  if (tick - phase_last_switch[phase] < SETTLE_TICKS) return
+  if (manual_action || !meters_ok) return null
+  if (tick - phase_last_switch[phase] < SETTLE_TICKS) return null
 
   // surplus: turn on the highest-priority consumer that fits
   if (available > 0) {
@@ -282,10 +282,10 @@ function decide_phase(phase, available, actions) {
       if (c.max_consumption * ON_RATIO < available) {
         log_event('info', 'turning on ' + c.name + ' (phase ' + phase + ', ' + Math.round(available) + ' W surplus)')
         actions.push({ consumer: c, on: true })
-        return
+        return null
       }
     }
-    return
+    return null
   }
 
   // deficit: only the lowest-priority consumer that actually draws power is
@@ -300,7 +300,7 @@ function decide_phase(phase, available, actions) {
         log_event('info', 'turning off ' + c.name + ' (phase ' + phase + ', ' + Math.round(-available) + ' W deficit)')
         actions.push({ consumer: c, on: false })
       }
-      return
+      return null
     }
   }
 }
@@ -309,7 +309,7 @@ function decide_phase(phase, available, actions) {
 function run_actions(actions, i, id) {
   if (i >= actions.length) {
     poll_status(id, 0)
-    return
+    return null
   }
   let c = actions[i].consumer
   let on = actions[i].on
@@ -326,10 +326,10 @@ function run_actions(actions, i, id) {
 }
 
 function poll_status(id, i) {
-  if (id !== cycle_id) return // a newer cycle took over
+  if (id !== cycle_id) return null // a newer cycle took over
   if (i >= consumers.length) {
     busy = false
-    return
+    return null
   }
   let c = consumers[i]
 
@@ -342,7 +342,7 @@ function poll_status(id, i) {
       }
       poll_status(id, i + 1)
     })
-    return
+    return null
   }
 
   Shelly.call('HTTP.GET', { url: 'http://' + c.ip + '/meter/0', timeout: HTTP_TIMEOUT }, function (result, error_code) {
@@ -351,7 +351,7 @@ function poll_status(id, i) {
       set_online(c, false)
       c.current_consumption = null
       poll_status(id, i + 1)
-      return
+      return null
     }
     // devices without a power meter answer /meter/0 with an error, that's fine
     let meter = get_json(result, error_code)
@@ -377,7 +377,7 @@ function poll_relay(id, i, c) {
 function save_consumers() {
   if (saving) {
     save_again = true
-    return
+    return null
   }
   saving = true
   save_consumer(0)
@@ -393,7 +393,7 @@ function save_consumer(i) {
         save_consumers()
       }
     })
-    return
+    return null
   }
   let c = consumers[i]
   let value = JSON.stringify({
@@ -418,7 +418,7 @@ function load_consumers(done) {
       }
       save_consumers()
       done()
-      return
+      return null
     }
     load_consumer(0, parse_json(result.value) * 1, [], done)
   })
@@ -429,7 +429,7 @@ function load_consumer(i, count, list, done) {
     consumers = list
     print('[kvs] loaded', list.length, 'consumers')
     done()
-    return
+    return null
   }
   Shelly.call('KVS.Get', { key: KVS_PREFIX + i }, function (result, error_code) {
     let stored = error_code === 0 && result && result.value ? parse_json(result.value) : null
@@ -517,7 +517,7 @@ function set_consumer(body, response) {
   let error = validate_consumer(body)
   if (error) {
     send_error(response, 400, error)
-    return
+    return null
   }
   body.max_consumption = body.max_consumption * 1
 
@@ -525,12 +525,12 @@ function set_consumer(body, response) {
   let c = body.original_name ? find_consumer(body.original_name) : null
   if (!c && body.original_name) {
     send_error(response, 404, 'consumer not found: ' + body.original_name)
-    return
+    return null
   }
   let same_name = find_consumer(body.name)
   if (same_name && same_name !== c) {
     send_error(response, 409, 'a consumer named ' + body.name + ' already exists')
-    return
+    return null
   }
 
   if (!c) {
@@ -566,7 +566,7 @@ function delete_consumer(body, response) {
   }
   if (kept.length === consumers.length) {
     send_error(response, 404, 'consumer not found: ' + body.name)
-    return
+    return null
   }
   consumers = kept
   log_event('info', 'deleted ' + body.name)
@@ -577,7 +577,7 @@ function delete_consumer(body, response) {
 function set_order(body, response) {
   if (!body.names) {
     send_error(response, 400, 'names is required')
-    return
+    return null
   }
   let ordered = []
   for (let i = 0; i < body.names.length; i++) {
@@ -596,7 +596,7 @@ function set_order(body, response) {
 
 function handle_update(request, response) {
   let body = read_body(request, response)
-  if (!body) return
+  if (!body) return null
   if (body.action === 'set_consumer') set_consumer(body, response)
   else if (body.action === 'delete_consumer') delete_consumer(body, response)
   else if (body.action === 'set_order') set_order(body, response)
