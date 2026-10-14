@@ -42,6 +42,12 @@ function check(file) {
       if (node.async) fail(node, 'async functions are not supported')
       if (node.generator) fail(node, 'generators are not supported')
     },
+    // Espruino reads the next line as the return value unless `;` or `}` follows a bare
+    // return, and prettier strips the semicolons, so `return` + newline + `if (...)` fails
+    ReturnStatement(node) {
+      if (!node.argument)
+        fail(node, 'bare return: the device parses the next line as the return value, use return null')
+    },
     NewExpression(node) {
       if (node.callee.name === 'Promise') fail(node, 'promises are not supported')
     }
