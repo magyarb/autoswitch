@@ -60,8 +60,7 @@
             :model-value="consumer.mode"
             mandatory
             density="compact"
-            variant="outlined"
-            divided
+            variant="text"
             class="segmented mode"
             @update:model-value="emit('modeChanged', consumer, $event)"
           >
@@ -217,6 +216,7 @@ function meterWidth(consumer: Consumer) {
 
 .mode {
   grid-area: mode;
+  justify-self: start;
 }
 
 .edit {

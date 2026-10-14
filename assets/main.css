@@ -69,17 +69,29 @@ html,
   color: var(--viz-muted);
 }
 
-/* segmented controls: selected segment gets a soft wash, not a solid block */
-.segmented.v-btn-group {
-  border-color: var(--viz-hairline) !important;
+/* segmented controls: one hairline track with separate rounded segments and a small gap;
+   the selected segment gets a soft wash, not a solid block */
+.v-application .segmented.v-btn-group {
+  height: auto;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--viz-hairline);
+  border-radius: 10px;
 }
 
-.segmented .v-btn {
-  border-color: var(--viz-hairline) !important;
+.v-application .segmented .v-btn {
+  height: 30px !important;
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: 8px !important;
 }
 
-.segmented .v-btn--active > .v-btn__overlay {
-  opacity: 0.14;
+.v-application .segmented .v-btn:not(.v-btn--active) {
+  color: var(--viz-text-secondary);
+}
+
+.v-application .segmented .v-btn--active > .v-btn__overlay {
+  opacity: 0.16;
 }
 
 ::-webkit-scrollbar {

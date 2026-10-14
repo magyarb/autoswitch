@@ -13,16 +13,16 @@
       />
       <v-spacer />
       <div class="controls">
-        <v-btn-toggle v-model="range" mandatory density="compact" variant="outlined" divided class="segmented">
+        <v-btn-toggle v-model="range" mandatory density="compact" variant="text" class="segmented">
           <v-btn v-for="(r, key) in HISTORY_RANGES" :key="key" :value="key">{{ r.label }}</v-btn>
         </v-btn-toggle>
-        <v-btn-toggle v-model="view" mandatory density="compact" variant="outlined" divided class="segmented">
+        <v-btn-toggle v-model="view" mandatory density="compact" variant="text" class="segmented">
           <v-btn value="total">Total</v-btn>
           <v-btn value="phases">Per phase</v-btn>
         </v-btn-toggle>
-        <v-btn-toggle v-model="display" mandatory density="compact" variant="outlined" divided class="segmented">
-          <v-btn value="chart" :icon="mdiChartLine" aria-label="Chart" />
-          <v-btn value="table" :icon="mdiTable" aria-label="Table" />
+        <v-btn-toggle v-model="display" mandatory density="compact" variant="text" class="segmented">
+          <v-btn value="chart" aria-label="Chart"><v-icon :icon="mdiChartLine" size="18" /></v-btn>
+          <v-btn value="table" aria-label="Table"><v-icon :icon="mdiTable" size="18" /></v-btn>
         </v-btn-toggle>
       </div>
     </div>
