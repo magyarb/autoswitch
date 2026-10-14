@@ -2,8 +2,11 @@
 // Autoswitch controller script for a Shelly Gen2+ device (e.g. Pro 3EM).
 //
 // Written for the Shelly scripting subset: only let, function, if/for, closures,
-// JSON, Shelly.call, Timer.set and HTTPServer are used. No arrow functions,
-// template literals, classes, spread, promises or try/catch.
+// try/catch, JSON, Shelly.call, Timer.set and HTTPServer are used. No arrow functions,
+// template literals, classes, spread, promises or hoisting.
+// Device limits (checked by `yarn lint:shelly`): at most 5 HTTP endpoints, 5 timers and
+// 5 calls in flight, and callbacks nested at most one level deep (deeper nesting can
+// crash the device), so multi-step chains use named top-level functions.
 
 // ---- configuration ---------------------------------------------------------
 
@@ -48,6 +51,7 @@ let a_production = 0
 let b_production = 0
 let c_production = 0
 let meters_ok = false
+let production_ok = false
 
 let consumers = []
 
@@ -131,18 +135,26 @@ function find_consumer(name) {
   return null
 }
 
+// JSON.parse throws on malformed text; that must never stop the script
+function parse_json(text) {
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    return null
+  }
+}
+
 // Returns the parsed body of a successful HTTP.GET, or null on any error.
 function get_json(result, error_code) {
   if (error_code !== 0 || !result || result.code !== 200 || !result.body) return null
-  return JSON.parse(result.body)
+  return parse_json(result.body)
 }
 
-// Reads EM.GetStatus from the local device or a remote one. cb(status or null)
-function read_em(ip, cb) {
+// Reads EM.GetStatus from the local device or a remote one. cb(status or null, id)
+function read_em(ip, id, cb) {
   if (ip === controller_ip) {
     Shelly.call('EM.GetStatus', { id: 0 }, function (result, error_code) {
-      if (error_code !== 0 || !result) cb(null)
-      else cb(result)
+      cb(error_code === 0 && result ? result : null, id)
     })
     return
   }
@@ -150,7 +162,7 @@ function read_em(ip, cb) {
     'HTTP.GET',
     { url: 'http://' + ip + '/rpc/EM.GetStatus?id=0', timeout: HTTP_TIMEOUT },
     function (result, error_code) {
-      cb(get_json(result, error_code))
+      cb(get_json(result, error_code), id)
     }
   )
 }
@@ -195,37 +207,40 @@ function start_cycle() {
   busy = true
   busy_since = tick
   cycle_id++
-  let id = cycle_id
+  read_em(production_device_ip, cycle_id, on_production)
+}
 
-  read_em(production_device_ip, function (production) {
-    if (production) {
-      a_production = production.a_act_power
-      b_production = production.b_act_power
-      c_production = production.c_act_power
-    }
-    read_em(consumption_device_ip, function (consumption) {
-      if (consumption) {
-        a_consumption = consumption.a_act_power
-        b_consumption = consumption.b_act_power
-        c_consumption = consumption.c_act_power
-      }
-      meters_ok = !!production && !!consumption
-      if (!meters_ok && meters_state !== 'failed') {
-        log_event('error', 'cannot read the energy meters, automatic switching is paused')
-        meters_state = 'failed'
-      }
-      if (meters_ok && meters_state === 'failed') log_event('info', 'energy meters readable again')
-      if (meters_ok) meters_state = 'ok'
+// The steps of a cycle are top-level functions that pass the cycle id along:
+// read production -> read consumption -> decide and switch -> poll consumers.
+function on_production(production, id) {
+  production_ok = !!production
+  if (production) {
+    a_production = production.a_act_power
+    b_production = production.b_act_power
+    c_production = production.c_act_power
+  }
+  read_em(consumption_device_ip, id, on_consumption)
+}
 
-      let actions = []
-      decide_phase('A', a_production - a_consumption, actions)
-      decide_phase('B', b_production - b_consumption, actions)
-      decide_phase('C', c_production - c_consumption, actions)
-      run_actions(actions, 0, function () {
-        poll_status(id, 0)
-      })
-    })
-  })
+function on_consumption(consumption, id) {
+  if (consumption) {
+    a_consumption = consumption.a_act_power
+    b_consumption = consumption.b_act_power
+    c_consumption = consumption.c_act_power
+  }
+  meters_ok = production_ok && !!consumption
+  if (!meters_ok && meters_state !== 'failed') {
+    log_event('error', 'cannot read the energy meters, automatic switching is paused')
+    meters_state = 'failed'
+  }
+  if (meters_ok && meters_state === 'failed') log_event('info', 'energy meters readable again')
+  if (meters_ok) meters_state = 'ok'
+
+  let actions = []
+  decide_phase('A', a_production - a_consumption, actions)
+  decide_phase('B', b_production - b_consumption, actions)
+  decide_phase('C', c_production - c_consumption, actions)
+  run_actions(actions, 0, id)
 }
 
 function can_switch(c) {
@@ -290,9 +305,10 @@ function decide_phase(phase, available, actions) {
   }
 }
 
-function run_actions(actions, i, done) {
+// switches one relay after the other, then polls the consumers
+function run_actions(actions, i, id) {
   if (i >= actions.length) {
-    done()
+    poll_status(id, 0)
     return
   }
   let c = actions[i].consumer
@@ -305,7 +321,7 @@ function run_actions(actions, i, done) {
     } else {
       log_event('warn', 'failed to switch ' + c.name + (on ? ' on' : ' off'))
     }
-    run_actions(actions, i + 1, done)
+    run_actions(actions, i + 1, id)
   })
 }
 
@@ -340,17 +356,16 @@ function poll_status(id, i) {
     // devices without a power meter answer /meter/0 with an error, that's fine
     let meter = get_json(result, error_code)
     c.current_consumption = meter && meter.power !== undefined ? meter.power : null
+    poll_relay(id, i, c)
+  })
+}
 
-    Shelly.call(
-      'HTTP.GET',
-      { url: 'http://' + c.ip + '/relay/0', timeout: HTTP_TIMEOUT },
-      function (result2, error_code2) {
-        let relay = get_json(result2, error_code2)
-        set_online(c, !!relay && relay.ison !== undefined)
-        if (c.online) c.status = relay.ison ? 'on' : 'off'
-        poll_status(id, i + 1)
-      }
-    )
+function poll_relay(id, i, c) {
+  Shelly.call('HTTP.GET', { url: 'http://' + c.ip + '/relay/0', timeout: HTTP_TIMEOUT }, function (result, error_code) {
+    let relay = get_json(result, error_code)
+    set_online(c, !!relay && relay.ison !== undefined)
+    if (c.online) c.status = relay.ison ? 'on' : 'off'
+    poll_status(id, i + 1)
   })
 }
 
@@ -405,7 +420,7 @@ function load_consumers(done) {
       done()
       return
     }
-    load_consumer(0, JSON.parse(result.value), [], done)
+    load_consumer(0, parse_json(result.value) * 1, [], done)
   })
 }
 
@@ -417,7 +432,8 @@ function load_consumer(i, count, list, done) {
     return
   }
   Shelly.call('KVS.Get', { key: KVS_PREFIX + i }, function (result, error_code) {
-    if (error_code === 0 && result && result.value) list.push(make_consumer(JSON.parse(result.value)))
+    let stored = error_code === 0 && result && result.value ? parse_json(result.value) : null
+    if (stored) list.push(make_consumer(stored))
     else log_event('error', 'could not load saved consumer ' + i + ' (' + error_code + ')')
     load_consumer(i + 1, count, list, done)
   })
@@ -425,12 +441,15 @@ function load_consumer(i, count, list, done) {
 
 // ---- HTTP API --------------------------------------------------------------
 //
-// GET  /script/<id>/getCData        measurements and consumers
-// GET  /script/<id>/getLog          recent activity (the last LOG_SIZE events)
-// POST /script/<id>/ackLog          { seq } events up to seq were forwarded by the app
-// POST /script/<id>/setConsumer     add, or edit when original_name is sent
-// POST /script/<id>/deleteConsumer  { name }
-// POST /script/<id>/setOrder        { names: [...] } highest priority first
+// A script may register at most 5 endpoints, so all changes go through one.
+//
+// GET  /script/<id>/getCData  measurements and consumers
+// GET  /script/<id>/getLog    recent activity (the last LOG_SIZE events)
+// POST /script/<id>/update    { action, ... }:
+//   set_consumer     add, or edit when original_name is sent
+//   delete_consumer  { name }
+//   set_order        { names: [...] } highest priority first
+//   ack_log          { seq } events up to seq were forwarded by the app
 
 function send_json(response, code, obj) {
   response.code = code
@@ -454,11 +473,9 @@ function read_body(request, response) {
     send_json(response, 200, { status: 'ok' })
     return null
   }
-  if (!request.body) {
-    send_error(response, 400, 'missing request body')
-    return null
-  }
-  return JSON.parse(request.body)
+  let body = request.body ? parse_json(request.body) : null
+  if (!body) send_error(response, 400, 'missing or invalid JSON body')
+  return body
 }
 
 // Returns an error message, or null if the consumer is valid.
@@ -490,17 +507,13 @@ function handle_get_log(request, response) {
 }
 
 // the app reports which events it has forwarded, so other open browsers don't send them again
-function handle_ack_log(request, response) {
-  let body = read_body(request, response)
-  if (!body) return
+function ack_log(body, response) {
   let seq = body.seq * 1
   if (seq > log_forwarded_seq && seq <= log_seq) log_forwarded_seq = seq
   send_json(response, 200, { status: 'ok', forwarded_seq: log_forwarded_seq })
 }
 
-function handle_set_consumer(request, response) {
-  let body = read_body(request, response)
-  if (!body) return
+function set_consumer(body, response) {
   let error = validate_consumer(body)
   if (error) {
     send_error(response, 400, error)
@@ -546,9 +559,7 @@ function handle_set_consumer(request, response) {
   if (c.pending) start_cycle()
 }
 
-function handle_delete_consumer(request, response) {
-  let body = read_body(request, response)
-  if (!body) return
+function delete_consumer(body, response) {
   let kept = []
   for (let i = 0; i < consumers.length; i++) {
     if (consumers[i].name !== body.name) kept.push(consumers[i])
@@ -563,9 +574,7 @@ function handle_delete_consumer(request, response) {
   send_json(response, 200, { status: 'ok' })
 }
 
-function handle_set_order(request, response) {
-  let body = read_body(request, response)
-  if (!body) return
+function set_order(body, response) {
   if (!body.names) {
     send_error(response, 400, 'names is required')
     return
@@ -585,16 +594,23 @@ function handle_set_order(request, response) {
   send_json(response, 200, { status: 'ok' })
 }
 
+function handle_update(request, response) {
+  let body = read_body(request, response)
+  if (!body) return
+  if (body.action === 'set_consumer') set_consumer(body, response)
+  else if (body.action === 'delete_consumer') delete_consumer(body, response)
+  else if (body.action === 'set_order') set_order(body, response)
+  else if (body.action === 'ack_log') ack_log(body, response)
+  else send_error(response, 400, 'unknown action: ' + body.action)
+}
+
 // ---- start -----------------------------------------------------------------
 
 function start() {
   log_event('info', 'autoswitch ' + SCRIPT_VERSION + ' started with ' + consumers.length + ' consumers')
   HTTPServer.registerEndpoint('getCData', handle_get_data)
   HTTPServer.registerEndpoint('getLog', handle_get_log)
-  HTTPServer.registerEndpoint('ackLog', handle_ack_log)
-  HTTPServer.registerEndpoint('setConsumer', handle_set_consumer)
-  HTTPServer.registerEndpoint('deleteConsumer', handle_delete_consumer)
-  HTTPServer.registerEndpoint('setOrder', handle_set_order)
+  HTTPServer.registerEndpoint('update', handle_update)
   Timer.set(CYCLE_MS, true, cycle)
   cycle()
 }

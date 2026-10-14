@@ -83,22 +83,23 @@ export function useShelly() {
 
   const scriptUrl = (endpoint: string) => `http://${mainStore.controllerIp}/script/${mainStore.scriptId}/${endpoint}`
 
-  const post = (endpoint: string, body: unknown) =>
-    request<{ status: string }>(scriptUrl(endpoint), {
+  // the script allows only 5 endpoints, so every change goes to one, picked by `action`
+  const update = (action: string, body: object) =>
+    request<{ status: string }>(scriptUrl('update'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ action, ...body })
     })
 
   return {
     getData: () => request<ControllerData>(scriptUrl('getCData')),
     getLog: () => request<ActivityLog>(scriptUrl('getLog')),
-    ackLog: (seq: number) => post('ackLog', { seq }),
+    ackLog: (seq: number) => update('ack_log', { seq }),
     // originalName is the current name when editing, undefined when adding
     setConsumer: (consumer: ConsumerInput, originalName?: string) =>
-      post('setConsumer', { ...consumer, original_name: originalName }),
-    deleteConsumer: (name: string) => post('deleteConsumer', { name }),
-    setOrder: (names: string[]) => post('setOrder', { names }),
+      update('set_consumer', { ...consumer, original_name: originalName }),
+    deleteConsumer: (name: string) => update('delete_consumer', { name }),
+    setOrder: (names: string[]) => update('set_order', { names }),
     // net energy per phase, pre-aggregated by the meter: 3 values per record
     getNetEnergies: (ip: string, query: { ts: number; endTs: number; period: number; addKeys: boolean }) =>
       request<EnergyPage>(
