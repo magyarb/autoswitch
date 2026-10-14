@@ -9,9 +9,31 @@
         </v-btn>
       </v-toolbar>
       <v-card-text>
-        <v-text-field v-model="controllerIp" label="Controller IP" :variant="'underlined'"></v-text-field>
-        <v-text-field v-model="productionIp" label="Production IP" :variant="'underlined'"></v-text-field>
-        <v-text-field v-model="consumptionIp" label="Consumption IP" :variant="'underlined'"></v-text-field>
+        <v-text-field
+          v-model.trim="controllerIp"
+          label="Controller IP"
+          hint="The device running the autoswitch script"
+          :variant="'underlined'"
+        ></v-text-field>
+        <v-text-field
+          v-model.number="scriptId"
+          label="Script id"
+          type="number"
+          hint="Id of the autoswitch script on the controller"
+          :variant="'underlined'"
+        ></v-text-field>
+        <v-text-field
+          v-model.trim="productionIp"
+          label="Production meter IP"
+          hint="Used for the chart. The script's own meter IPs are set at the top of fw.js."
+          :variant="'underlined'"
+        ></v-text-field>
+        <v-text-field
+          v-model.trim="consumptionIp"
+          label="Consumption meter IP"
+          hint="Used for the chart. The script's own meter IPs are set at the top of fw.js."
+          :variant="'underlined'"
+        ></v-text-field>
       </v-card-text>
 
       <v-card-actions>
@@ -42,20 +64,28 @@ const props = defineProps({
 
 const emits = defineEmits(['cancelClicked', 'confirmClicked'])
 
-const controllerIp = ref<null | string>(null)
-const productionIp = ref<null | string>(null)
-const consumptionIp = ref<null | string>(null)
+const controllerIp = ref('')
+const productionIp = ref('')
+const consumptionIp = ref('')
+const scriptId = ref(1)
 
 watch(
   () => props.modelValue,
-  _val => {
+  isOpen => {
+    if (!isOpen) return
     controllerIp.value = mainStore.controllerIp
+    productionIp.value = mainStore.productionIp
+    consumptionIp.value = mainStore.consumptionIp
+    scriptId.value = mainStore.scriptId
   },
   { immediate: true }
 )
 
 function save() {
   mainStore.controllerIp = controllerIp.value
+  mainStore.productionIp = productionIp.value
+  mainStore.consumptionIp = consumptionIp.value
+  mainStore.scriptId = scriptId.value
   emits('confirmClicked')
 }
 const computedButtonVariant = computed(() => {

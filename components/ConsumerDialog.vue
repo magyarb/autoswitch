@@ -9,31 +9,71 @@
           <v-icon>$mdi-close</v-icon>
         </v-btn>
       </v-toolbar>
-      <v-card-text>
-        <v-text-field v-model="editedItem.name" label="Name" :variant="'underlined'"></v-text-field>
-        <v-text-field v-model="editedItem.phase" label="Phase" :variant="'underlined'"></v-text-field>
-        <v-text-field v-model="editedItem.ip" label="IP" :variant="'underlined'"></v-text-field>
-        <v-text-field
-          v-model="editedItem.max_consumption"
-          label="Max consumption"
-          :variant="'underlined'"
-        ></v-text-field>
-      </v-card-text>
+      <v-form ref="form" @submit.prevent="save">
+        <v-card-text>
+          <v-alert v-if="saveError" type="error" variant="tonal" class="mb-4">{{ saveError }}</v-alert>
+          <v-text-field
+            v-model.trim="editedItem.name"
+            label="Name"
+            :rules="[required, maxLength(32)]"
+            :variant="'underlined'"
+          ></v-text-field>
+          <v-text-field
+            v-model.trim="editedItem.ip"
+            label="IP"
+            :rules="[required, maxLength(40)]"
+            :variant="'underlined'"
+          ></v-text-field>
+          <v-select
+            v-model="editedItem.phase"
+            label="Phase"
+            :items="['A', 'B', 'C']"
+            :rules="[required]"
+            :variant="'underlined'"
+          ></v-select>
+          <v-text-field
+            v-model.number="editedItem.max_consumption"
+            label="Max consumption"
+            type="number"
+            suffix="W"
+            :rules="[positive]"
+            :variant="'underlined'"
+          ></v-text-field>
+          <v-select
+            v-model="editedItem.mode"
+            label="Mode"
+            :items="['auto', 'on', 'off']"
+            :rules="[required]"
+            :variant="'underlined'"
+          ></v-select>
+        </v-card-text>
 
-      <v-card-actions>
-        <v-btn :color="'success'" :variant="computedButtonVariant" class="flex-1" @click="save"> save </v-btn>
-      </v-card-actions>
+        <v-card-actions>
+          <v-btn
+            v-if="props.consumerName"
+            color="error"
+            :variant="computedButtonVariant"
+            :loading="isDeleting"
+            @click="remove"
+          >
+            delete
+          </v-btn>
+          <v-btn type="submit" :color="'success'" :variant="computedButtonVariant" :loading="isSaving" class="flex-1">
+            save
+          </v-btn>
+        </v-card-actions>
+      </v-form>
     </v-card>
   </v-dialog>
 </template>
 
 <script setup lang="ts">
-import _ from 'lodash'
 import { PropType } from 'vue'
 import { useTheme } from 'vuetify'
-import { Consumer, useMainStore } from '~/stores/main'
+import { ConsumerInput, useMainStore } from '~/stores/main'
 const theme = useTheme()
 const mainStore = useMainStore()
+const shelly = useShelly()
 
 const props = defineProps({
   modelValue: {
@@ -51,43 +91,65 @@ const props = defineProps({
     default: undefined
   }
 })
+const emits = defineEmits(['cancelClicked', 'confirmClicked'])
 
-const editedItem = ref<Partial<Consumer>>({
-  name: undefined,
-  ip: undefined,
-  max_consumption: undefined,
-  phase: undefined
-})
+const required = (value: unknown) => (value !== undefined && value !== null && value !== '') || 'Required'
+const maxLength = (max: number) => (value: string | undefined) => (value ?? '').length <= max || `Max ${max} characters`
+const positive = (value: unknown) => Number(value) > 0 || 'Must be a positive number'
+
+const form = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null)
+const editedItem = ref<Partial<ConsumerInput>>({})
+const isSaving = ref(false)
+const isDeleting = ref(false)
+const saveError = ref<string | null>(null)
 
 watch(
   () => props.modelValue,
-  _val => {
-    if (props.consumerName) {
-      const foundItem = mainStore.consumers.find(c => c.name === props.consumerName)
-      if (foundItem) editedItem.value = _.cloneDeep(foundItem)
-      else editedItem.value = { name: undefined, ip: undefined, max_consumption: undefined }
-    } else editedItem.value = { name: undefined, ip: undefined, max_consumption: undefined }
+  isOpen => {
+    if (!isOpen) return
+    saveError.value = null
+    const found = props.consumerName ? mainStore.consumers.find(c => c.name === props.consumerName) : undefined
+    editedItem.value = found
+      ? {
+          name: found.name,
+          ip: found.ip,
+          phase: found.phase,
+          max_consumption: found.max_consumption,
+          mode: found.mode
+        }
+      : { mode: 'auto' }
   },
   { immediate: true }
 )
-const emits = defineEmits(['cancelClicked', 'confirmClicked'])
 
 async function save() {
-  mainStore.consumers.splice(
-    mainStore.consumers.findIndex(c => c.name === props.consumerName),
-    1,
-    editedItem.value as Consumer
-  )
-  const response = await fetch('http://192.168.0.40/script/1/setConsumer', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(editedItem.value)
-  })
-  console.log(await response.text())
-  emits('confirmClicked')
+  if (!form.value || !(await form.value.validate()).valid) return
+  isSaving.value = true
+  saveError.value = null
+  try {
+    await shelly.setConsumer(editedItem.value as ConsumerInput, props.consumerName)
+    emits('confirmClicked')
+  } catch (e) {
+    saveError.value = errorMessage(e)
+  } finally {
+    isSaving.value = false
+  }
 }
+
+async function remove() {
+  if (!props.consumerName || !window.confirm(`Delete ${props.consumerName}?`)) return
+  isDeleting.value = true
+  saveError.value = null
+  try {
+    await shelly.deleteConsumer(props.consumerName)
+    emits('confirmClicked')
+  } catch (e) {
+    saveError.value = errorMessage(e)
+  } finally {
+    isDeleting.value = false
+  }
+}
+
 const computedButtonVariant = computed(() => {
   if (props.buttonVariant) return props.buttonVariant
   else if (theme.global.current.value.dark) return 'tonal'
