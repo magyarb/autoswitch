@@ -37,8 +37,9 @@ html,
   overflow-y: auto;
 }
 
-/* .v-application raises specificity above Vuetify's per-component CSS, which loads later */
-.v-application .v-btn {
+/* "html" raises specificity above Vuetify's per-component CSS, which loads later;
+   not .v-application, because dialogs render outside it */
+html .v-btn {
   text-transform: none;
   letter-spacing: normal;
   font-weight: 500;
