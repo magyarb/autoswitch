@@ -142,6 +142,11 @@ function set_relay(c, on, cb) {
 
 function cycle() {
   tick++
+  start_cycle()
+}
+
+// Also called directly to apply a manual change right away instead of on the next tick.
+function start_cycle() {
   if (busy && tick - busy_since < WATCHDOG_TICKS) return
   if (busy) print('[cycle] previous cycle did not finish, starting a new one')
   busy = true
@@ -471,6 +476,7 @@ function handle_set_consumer(request, response) {
   }
   save_consumers()
   send_json(response, 200, { status: 'ok' })
+  if (c.pending) start_cycle()
 }
 
 function handle_delete_consumer(request, response) {
