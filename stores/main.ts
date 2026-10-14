@@ -1,61 +1,68 @@
 import { defineStore } from 'pinia'
 
+export type Phase = 'A' | 'B' | 'C'
+export type ConsumerMode = 'auto' | 'on' | 'off'
+
 export type Consumer = {
-  order: number
   name: string
   ip: string
-  status: 'on' | 'off'
+  status: 'on' | 'off' | 'unknown'
+  online: boolean
+  // a manual mode change the controller hasn't applied yet
+  pending?: boolean
   current_consumption: number | null
   max_consumption: number
-  mode: 'auto' | 'on' | 'off'
-  phase: 'A' | 'B' | 'C'
+  mode: ConsumerMode
+  phase: Phase
+}
+
+// the fields the controller script stores, everything else is runtime state
+export type ConsumerInput = Pick<Consumer, 'name' | 'ip' | 'max_consumption' | 'phase' | 'mode'>
+
+export type ControllerData = {
+  a_consumption: number
+  b_consumption: number
+  c_consumption: number
+  a_production: number
+  b_production: number
+  c_production: number
+  meters_ok: boolean
+  consumers: Consumer[]
 }
 
 export const useMainStore = defineStore(
   'main',
   () => {
-    const controllerIp = ref<null | string>(null)
-    const productionIp = ref<null | string>(null)
-    const consumptionIp = ref<null | string>(null)
-    const consumers = ref<Partial<Consumer>[]>([
-      {
-        name: 'bojlerA',
-        ip: '127.0.0.1',
-        status: 'off',
-        current_consumption: 1,
-        max_consumption: 800,
-        mode: 'on',
-        phase: 'A'
-      },
-      {
-        name: 'bojlerB',
-        ip: '192.168.0.37',
-        status: 'on',
-        current_consumption: null,
-        max_consumption: 800,
-        mode: 'auto',
-        phase: 'B'
-      },
-      {
-        name: 'bojlerC',
-        ip: '192.168.0.38',
-        status: 'on',
-        current_consumption: null,
-        max_consumption: 800,
-        mode: 'auto',
-        phase: 'C'
-      },
-      {
-        name: 'radiatorKonyha',
-        ip: '192.168.0.41',
-        status: 'on',
-        current_consumption: null,
-        max_consumption: 800,
-        mode: 'auto',
-        phase: 'A'
-      }
-    ])
-    return { controllerIp, consumptionIp, productionIp, consumers }
+    const controllerIp = ref('192.168.0.40')
+    const productionIp = ref('192.168.0.40')
+    const consumptionIp = ref('192.168.0.49')
+    const scriptId = ref(1)
+    const theme = ref<'dark' | 'light'>('dark')
+
+    // live controller state, never persisted
+    const data = ref<ControllerData | null>(null)
+    const consumers = ref<Consumer[]>([])
+    const lastUpdated = ref<number | null>(null)
+    const loadError = ref<string | null>(null)
+
+    return {
+      controllerIp,
+      consumptionIp,
+      productionIp,
+      scriptId,
+      theme,
+      data,
+      consumers,
+      lastUpdated,
+      loadError
+    }
   },
-  { persist: true }
+  {
+    persist: {
+      // new key, so stale state saved by older versions (test consumers, null IPs) is ignored
+      key: 'autoswitch-settings',
+      storage: persistedState.localStorage,
+      paths: ['controllerIp', 'productionIp', 'consumptionIp', 'scriptId', 'theme']
+    }
+  }
 )
